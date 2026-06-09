@@ -41,6 +41,11 @@ func MigrateToMemory(dbPath string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to migrate messages: %w", err)
 	}
 
+	// 迁移图片映射信息
+	if err := migrateImageMappings(db, memDB); err != nil {
+		return nil, fmt.Errorf("failed to migrate image mappings: %w", err)
+	}
+
 	// 更新消息内容文本
 	if err := updateContentText(memDB); err != nil {
 		return nil, fmt.Errorf("failed to update content text: %w", err)
@@ -173,6 +178,30 @@ func migrateMessages(srcDB *sql.DB, destDB *gorm.DB) error {
 		}
 	}
 
+	return nil
+}
+
+func migrateImageMappings(srcDB *sql.DB, destDB *gorm.DB) error {
+	var mappings []ImageMapping
+	rows, err := srcDB.Query("SELECT url, local_path, mid FROM im_image_info WHERE local_path IS NOT NULL AND local_path != ''")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var mapping ImageMapping
+		if err := rows.Scan(&mapping.URL, &mapping.LocalPath, &mapping.MID); err != nil {
+			return err
+		}
+		mappings = append(mappings, mapping)
+	}
+
+	if err := destDB.Create(&mappings).Error; err != nil {
+		return err
+	}
+
+	logger.Info("migrated %d image mappings", len(mappings))
 	return nil
 }
 
@@ -334,6 +363,7 @@ func createMemoryDB() (*gorm.DB, error) {
 		&User{},
 		&CurrentUser{},
 		&Message{},
+		&ImageMapping{},
 	); err != nil {
 		return nil, fmt.Errorf("failed to migrate database schema: %w", err)
 	}
@@ -433,4 +463,3 @@ func DownloadImages(db *gorm.DB, token string) error {
 
 	return nil
 }
-

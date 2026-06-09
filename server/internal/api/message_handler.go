@@ -7,17 +7,20 @@ import (
 	"dingtalk/internal/service"
 
 	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 )
 
 type MessageHandler struct {
 	messageService *service.MessageService
 	userService    *service.UserService
+	db             *gorm.DB
 }
 
-func NewMessageHandler(messageService *service.MessageService, userService *service.UserService) *MessageHandler {
+func NewMessageHandler(messageService *service.MessageService, userService *service.UserService, db *gorm.DB) *MessageHandler {
 	return &MessageHandler{
 		messageService: messageService,
 		userService:    userService,
+		db:             db,
 	}
 }
 
@@ -41,6 +44,7 @@ func (h *MessageHandler) GetConversationMessages(c echo.Context) error {
 	}
 
 	h.populateMessageSenders(items)
+	h.populateImageURLs(items)
 
 	resp := MessagesResponse{
 		HasMore: hasMore,
@@ -100,6 +104,7 @@ func (h *MessageHandler) SearchConversationMessages(c echo.Context) error {
 	}
 
 	h.populateMessageSenders(items)
+	h.populateImageURLs(items)
 
 	resp := SearchConvMessagesResponse{
 		Total: total,
@@ -122,4 +127,13 @@ func (h *MessageHandler) populateMessageSenders(messages []database.Message) {
 		messages[i].SenderName = userMap[messages[i].SenderID]
 		messages[i].ContentTypeStr = messages[i].ContentType.String()
 	}
+}
+
+func (h *MessageHandler) populateImageURLs(messages []database.Message) {
+	var currentUser database.CurrentUser
+	if err := h.db.First(&currentUser).Error; err != nil {
+		return
+	}
+
+	_ = h.messageService.PopulateLocalImageURL(messages, currentUser.ID)
 }

@@ -1,6 +1,10 @@
 package service
 
 import (
+	"os"
+	"path/filepath"
+	"strconv"
+
 	"dingtalk/internal/database"
 
 	"gorm.io/gorm"
@@ -103,4 +107,47 @@ func (s *MessageService) SearchInConversation(cid, query string, page, size int)
 	q.Order("created_at DESC").Limit(size).Offset(offset).Find(&items)
 
 	return items, total, nil
+}
+
+func (s *MessageService) PopulateLocalImageURL(messages []database.Message, currentUserID int64) error {
+	var imageIDs []int64
+	for _, msg := range messages {
+		if msg.ContentType == database.MessageContentTypeImage {
+			imageIDs = append(imageIDs, msg.ID)
+		}
+	}
+
+	if len(imageIDs) == 0 {
+		return nil
+	}
+
+	var mappings []database.ImageMapping
+	s.db.Table("image_mappings").Where("mid IN ?", imageIDs).Find(&mappings)
+
+	midToPath := make(map[int64]string)
+	for _, m := range mappings {
+		midToPath[m.MID] = m.LocalPath
+	}
+
+	homeDir, _ := os.UserHomeDir()
+	basePath := filepath.Join(homeDir, ".config", "DingTalk", strconv.FormatInt(currentUserID, 10)+"_v2", "resource_cache")
+
+	for i := range messages {
+		if messages[i].ContentType != database.MessageContentTypeImage {
+			continue
+		}
+		localPath, ok := midToPath[messages[i].ID]
+		if !ok || localPath == "" {
+			continue
+		}
+
+		relPath, err := filepath.Rel(basePath, localPath)
+		if err != nil {
+			continue
+		}
+
+		messages[i].LocalImageURL = "/cache/" + filepath.ToSlash(relPath)
+	}
+
+	return nil
 }

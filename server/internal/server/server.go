@@ -40,7 +40,7 @@ func New(db *gorm.DB, distFS embed.FS) *echo.Echo {
 
 	conversationHandler := api.NewConversationHandler(conversationService)
 	userHandler := api.NewUserHandler(userService)
-	messageHandler := api.NewMessageHandler(messageService, userService)
+	messageHandler := api.NewMessageHandler(messageService, userService, db)
 
 	apiGroup := e.Group("/api")
 	apiGroup.GET("/conversations/home", conversationHandler.GetConversationsHome)
@@ -55,8 +55,12 @@ func New(db *gorm.DB, distFS embed.FS) *echo.Echo {
 	if err := db.First(&currentUser).Error; err == nil {
 		homeDir, err := os.UserHomeDir()
 		if err == nil {
-			staticPath := filepath.Join(homeDir, ".dingwave", fmt.Sprintf("%d", currentUser.ID))
+			// 指向钉钉的 ImageFiles 目录
+			staticPath := filepath.Join(homeDir, ".config/DingTalk", fmt.Sprintf("%d_v2", currentUser.ID), "ImageFiles")
 			e.Static("/static", staticPath)
+			// 指向钉钉的 resource_cache 目录（高质量图片）
+			resourceCachePath := filepath.Join(homeDir, ".config/DingTalk", fmt.Sprintf("%d_v2", currentUser.ID), "resource_cache")
+			e.Static("/cache", resourceCachePath)
 		}
 	}
 

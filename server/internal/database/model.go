@@ -117,7 +117,15 @@ type Message struct {
 	ContentTypeStr string             `gorm:"-" json:"content_type_str"`                    // 消息内容类型字符串（不存储）
 	ContentText    string             `gorm:"column:content_text" json:"content_text"`      // 消息文本内容
 	ContentJson    string             `gorm:"column:content_json" json:"content_json"`      // 数据库存储原始消息 JSON 内容
+	LocalImageURL  string             `gorm:"-" json:"local_image_url,omitempty"`           // 本地高质量图片 URL（运行时计算）
 
 	CreatedAt int64 `gorm:"column:created_at;index" json:"created_at"` // 消息创建时间戳
 	IsRecall  bool  `gorm:"column:is_recall" json:"is_recall"`         // 是否为撤回消息
+}
+
+// im_image_info (钉钉图片信息映射表)
+type ImageMapping struct {
+	URL       string `gorm:"column:url" json:"url"`
+	LocalPath string `gorm:"column:local_path" json:"local_path"`
+	MID       int64  `gorm:"column:mid;index" json:"mid"`
 }

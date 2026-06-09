@@ -63,9 +63,9 @@
             <div class="image-container">
               <a-image
                 v-if="!imageErrors[msg.id]"
-                :src="transformImageUrl(parseContentJson(msg.content_json)?.url)"
+                :src="getPrimaryImageUrl(msg)"
                 :width="200"
-                @error="imageErrors[msg.id] = true"
+                @error="handleImageError(msg, parseContentJson(msg.content_json))"
               />
               <div v-else class="image-error">
                 <FileOutlined />
@@ -227,9 +227,60 @@ const shouldShowTimeSeparator = (msg: Message, index: number) => {
   return timeDiff > 1800000
 }
 
+const getImageUrl = (content: any): string => {
+  if (!content) return ''
+
+  // 尝试使用 resource_cache 中的高质量图片（通过 content_md5）
+  try {
+    const extension = content.extension ? JSON.parse(content.extension) : null
+    if (extension?.content_md5) {
+      const md5 = extension.content_md5
+      // resource_cache 文件命名格式: md5前2位/md5后位.扩展名
+      const dir = md5.substring(0, 2)
+      const ext = extension.p_type || 'png'
+      return `/cache/${dir}/${md5}.${ext}`
+    }
+  } catch (e) {
+    // JSON 解析失败，继续其他方法
+  }
+
+  // 降级使用钉钉云端 URL（高质量图片）
+  if (content.url) {
+    return content.url
+  }
+
+  // 最后降级使用 ImageFiles 中的缩略图
+  if (content.mediaId) {
+    const mediaId = content.mediaId
+    return `/static/${mediaId}.webp`
+  }
+
+  return ''
+}
+
+const getPrimaryImageUrl = (msg: Message): string => {
+  // 优先使用后端映射的本地高质量图
+  if ((msg as any).local_image_url) {
+    return (msg as any).local_image_url
+  }
+  // 降级到 content_json 中的字段
+  const content = parseContentJson(msg.content_json)
+  if (content?.url) return content.url
+  if (content?.mediaId) return `/static/${content.mediaId}.webp`
+  return ''
+}
+
+const handleImageError = (msg: any, content: any) => {
+  // 如果主图片加载失败，尝试使用本地缩略图
+  // 由于 Vue 的事件处理限制，这里我们直接设置错误标记
+  // 未来可以改进为动态切换图片源
+  imageErrors.value[msg.id] = true
+}
+
 const transformImageUrl = (url: string | undefined): string => {
   if (!url) return ''
-  return url.replace(/^https?:\/\/down\.dingtalk\.com\//, 'http://localhost:8080/static/')
+  // 直接使用钉钉在线 URL，不替换
+  return url
 }
 </script>
 
